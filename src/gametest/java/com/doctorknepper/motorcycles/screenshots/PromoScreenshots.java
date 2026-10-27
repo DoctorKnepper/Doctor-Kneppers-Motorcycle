@@ -69,6 +69,8 @@ public class PromoScreenshots implements FabricClientGameTest {
 		s.runCommand("gamerule send_command_feedback false");
 		s.runCommand("gamerule show_advancement_messages false");
 		s.runCommand("gamerule spawn_mobs false");
+		s.runCommand("gamerule advance_time false");
+		s.runCommand("gamerule doDaylightCycle false");
 		s.runCommand("forceload add -48 -80 191 31");
 		ctx.waitTicks(200);
 
@@ -157,7 +159,10 @@ public class PromoScreenshots implements FabricClientGameTest {
 	private static void clearBikes(final ClientGameTestContext ctx, final TestServerContext s) {
 		s.runCommand("ride @p dismount");
 		s.runCommand("kill @e[type=!minecraft:player]");
-		ctx.waitTicks(5);
+		ctx.waitTicks(3);
+		s.runCommand("kill @e[type=minecraft:item]");
+		s.runCommand("clear @p");
+		ctx.waitTicks(3);
 	}
 
 	private static void hud(final ClientGameTestContext ctx, final boolean visible, final CameraType camera) {
@@ -182,11 +187,9 @@ public class PromoScreenshots implements FabricClientGameTest {
 	private static void heroShots(final ClientGameTestContext ctx, final TestSingleplayerContext sp) {
 		TestServerContext s = sp.getServer();
 		summon(s, 10.5, 1.5, -60F, RED, fullKit("netherite"), null);
-		camera(ctx, sp, 13.6, -59.0, 4.4, 10.5, -59.55, 1.5);
+		camera(ctx, sp, 12.2, -58.95, 5.5, 10.5, -59.55, 1.5);
 		shot(ctx, "hero_front");
 		camera(ctx, sp, 7.0, -58.9, 4.6, 10.5, -59.6, 1.5);
-		shot(ctx, "hero_rear");
-		camera(ctx, sp, 10.3, -59.25, 5.6, 10.5, -59.55, 1.5);
 		shot(ctx, "hero_side");
 		clearBikes(ctx, s);
 	}
@@ -205,13 +208,12 @@ public class PromoScreenshots implements FabricClientGameTest {
 
 	private static void paintLineup(final ClientGameTestContext ctx, final TestSingleplayerContext sp) {
 		TestServerContext s = sp.getServer();
-		int[] colors = {RED, ORANGE, 4, 5, 9, BLUE, 10, 6, BLACK, 0};
-		// two staggered rows so every colour is visible
+		int[] colors = {RED, ORANGE, 4, 5, 9, BLUE, 10, 6};
+		// one row, parked at an angle like bikes along a kerb
 		for (int i = 0; i < colors.length; i++) {
-			boolean back = i % 2 == 1;
-			summon(s, 2.5 + i * 1.7, back ? -1.5 : 1.8, -50F, colors[i], items("0", "dkmotorcycles:iron_engine"), null);
+			summon(s, 3.0 + i * 2.0, 2.0, -30F, colors[i], items("0", "dkmotorcycles:iron_engine"), null);
 		}
-		camera(ctx, sp, 10.2, -57.9, 9.5, 10.2, -59.7, 0.3);
+		camera(ctx, sp, 10.0, -58.2, 10.5, 10.0, -59.6, 2.0);
 		shot(ctx, "paint_colors");
 		clearBikes(ctx, s);
 	}
@@ -233,6 +235,7 @@ public class PromoScreenshots implements FabricClientGameTest {
 	private static void mount(final ClientGameTestContext ctx, final TestSingleplayerContext sp, final double x, final float yaw,
 		final int color, final String kit, final boolean passenger) {
 		TestServerContext s = sp.getServer();
+		s.runCommand("clear @p");
 		s.runCommand("gamemode creative @p");
 		s.runCommand(String.format(Locale.ROOT, "tp @p %.1f %d 1.5 %.1f 10", x, Y, yaw));
 		summon(s, x, 1.5, yaw, color, kit, null);
@@ -251,6 +254,7 @@ public class PromoScreenshots implements FabricClientGameTest {
 
 	private static void ridingShots(final ClientGameTestContext ctx, final TestSingleplayerContext sp) {
 		TestServerContext s = sp.getServer();
+		ctx.runOnClient(mc -> mc.options.fov().set(70));
 		mount(ctx, sp, 0.5, -90F, RED, fullKit("netherite"), true);
 		hud(ctx, false, CameraType.THIRD_PERSON_FRONT);
 		ctx.waitTicks(20);
@@ -266,6 +270,7 @@ public class PromoScreenshots implements FabricClientGameTest {
 		ctx.getInput().releaseKey(options -> options.keyUp);
 		ctx.waitTicks(60);
 		clearBikes(ctx, s);
+		ctx.runOnClient(mc -> mc.options.fov().set(50));
 	}
 
 	private static void bikeInventory(final ClientGameTestContext ctx, final TestSingleplayerContext sp) {
@@ -387,6 +392,7 @@ public class PromoScreenshots implements FabricClientGameTest {
 	private static void tunnelHeadlight(final ClientGameTestContext ctx, final TestSingleplayerContext sp) {
 		TestServerContext s = sp.getServer();
 		s.runCommand("time set 18000");
+		ctx.runOnClient(mc -> mc.options.fov().set(70));
 		mount(ctx, sp, 152.5, -90F, BLACK, fullKit("diamond"), false);
 		hud(ctx, false, CameraType.THIRD_PERSON_BACK);
 		ctx.getInput().holdKey(options -> options.keyUp);

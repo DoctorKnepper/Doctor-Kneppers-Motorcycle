@@ -13,7 +13,7 @@
   "key.category.dkmotorcycles.motorcycles": "Doctor Knepper's Motorcycles",
   "key.dkmotorcycles.headlight": "Toggle Headlight",
 
-  "gui.dkmotorcycles.status": "Fuel %s%%  Health %s/%s",
+  "gui.dkmotorcycles.status": "Fuel %s%%  HP %s/%s",
   "gui.dkmotorcycles.fuel_time": "About %s:%s of riding left",
   "gui.dkmotorcycles.slot.engine": "Engine (copper, iron, diamond or netherite)",
   "gui.dkmotorcycles.slot.fuel_tank": "Large Fuel Tank (triples fuel capacity)",
