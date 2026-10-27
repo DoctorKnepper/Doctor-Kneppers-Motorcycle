@@ -100,6 +100,7 @@ public class PromoScreenshots implements FabricClientGameTest {
 			s.runCommand("fill " + d + " -61 0 " + (d + 1) + " -61 0 minecraft:yellow_concrete");
 		}
 		s.runCommand("fill 185 -60 -3 185 -56 3 minecraft:deepslate_bricks");
+		s.runCommand("fill 150 -60 -3 150 -56 3 minecraft:deepslate_bricks");
 		s.runCommand("kill @e[type=!minecraft:player]");
 		ctx.waitTicks(40);
 	}
@@ -393,17 +394,15 @@ public class PromoScreenshots implements FabricClientGameTest {
 		TestServerContext s = sp.getServer();
 		s.runCommand("time set 18000");
 		ctx.runOnClient(mc -> mc.options.fov().set(70));
-		mount(ctx, sp, 152.5, -90F, BLACK, fullKit("diamond"), false);
+		mount(ctx, sp, 156.5, -90F, BLACK, fullKit("diamond"), false);
 		hud(ctx, false, CameraType.THIRD_PERSON_BACK);
-		ctx.getInput().holdKey(options -> options.keyUp);
-		ctx.waitTicks(8);
-		ctx.getInput().releaseKey(options -> options.keyUp);
 		ctx.waitTicks(40);
 		settle(ctx, sp);
-		shot(ctx, "headlight_tunnel");
-		hud(ctx, false, CameraType.THIRD_PERSON_FRONT);
-		ctx.waitTicks(20);
-		shot(ctx, "headlight_tunnel_front");
+		shot(ctx, "headlight_on");
+		s.runOnServer(server -> player(server).level().getEntities(ModEntities.MOTORCYCLE, e -> true).getFirst().toggleHeadlight());
+		ctx.waitTicks(40);
+		settle(ctx, sp);
+		shot(ctx, "headlight_off");
 		clearBikes(ctx, s);
 	}
 }
