@@ -124,7 +124,7 @@ public class MotorcycleScreen extends AbstractContainerScreen<MotorcycleMenu> {
 			Component status = Component.translatable(
 				"gui.dkmotorcycles.status", fuelPercent, Math.round(bike.getHealth()), Math.round(bike.getMaxHealth())
 			);
-			graphics.text(this.font, status, this.imageWidth - 8 - this.font.width(status), this.titleLabelY, LABEL, false);
+			graphics.text(this.font, status, this.imageWidth - 8 - this.font.width(status), this.inventoryLabelY, LABEL, false);
 		}
 	}
 
