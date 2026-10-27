@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "dkmotorcycles-screenshots",
+  "version": "1.0.0",
+  "name": "Doctor Knepper's Motorcycles - screenshot script",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": ["com.doctorknepper.motorcycles.screenshots.PromoScreenshots"]
+  },
+  "depends": {"dkmotorcycles": "*", "fabric-client-gametest-api-v1": "*"}
+}

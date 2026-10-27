@@ -50,3 +50,15 @@ jar {
 		rename { "${it}_$projectName" }
 	}
 }
+
+// Scripted client run that captures promo screenshots: ./gradlew runClientGameTest
+// (needs a display; on a headless machine use xvfb-run). Images land in build/run/clientGameTest/screenshots.
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "dkmotorcycles-screenshots"
+		enableGameTests = false
+		enableClientGameTests = true
+		eula = true
+	}
+}
