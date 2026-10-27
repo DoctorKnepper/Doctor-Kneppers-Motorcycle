@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smithing_transform",
+  "addition": "#minecraft:netherite_tool_materials",
+  "base": "dkmotorcycles:diamond_engine",
+  "result": {
+    "id": "dkmotorcycles:netherite_engine"
+  },
+  "template": "minecraft:netherite_upgrade_smithing_template"
+}

@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "dkmotorcycles",
+	"version": "${version}",
+	"name": "Doctor Knepper's Motorcycles",
+	"description": "Ride an upgradeable, fuel-burning motorcycle: copper to netherite engines, saddlebags, a trunk, a second seat, paint and a headlight that lights the road.",
+	"authors": [
+		"DoctorKnepper"
+	],
+	"contact": {
+		"sources": "https://github.com/DoctorKnepper/doctor-kneppers-motorcyle",
+		"issues": "https://github.com/DoctorKnepper/doctor-kneppers-motorcyle/issues"
+	},
+	"license": "MIT",
+	"icon": "assets/dkmotorcycles/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.doctorknepper.motorcycles.DKMotorcycles"
+		],
+		"client": [
+			"com.doctorknepper.motorcycles.client.DKMotorcyclesClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

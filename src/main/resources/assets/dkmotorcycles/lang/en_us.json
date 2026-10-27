@@ -1,0 +1,34 @@
+{
+  "entity.dkmotorcycles.motorcycle": "Motorcycle",
+
+  "item.dkmotorcycles.motorcycle": "Motorcycle",
+  "item.dkmotorcycles.copper_engine": "Copper Engine",
+  "item.dkmotorcycles.iron_engine": "Iron Engine",
+  "item.dkmotorcycles.diamond_engine": "Diamond Engine",
+  "item.dkmotorcycles.netherite_engine": "Netherite Engine",
+  "item.dkmotorcycles.fuel_tank": "Large Fuel Tank",
+  "item.dkmotorcycles.saddlebag": "Saddlebag",
+  "item.dkmotorcycles.trunk": "Motorcycle Trunk",
+
+  "key.category.dkmotorcycles.motorcycles": "Doctor Knepper's Motorcycles",
+  "key.dkmotorcycles.headlight": "Toggle Headlight",
+
+  "gui.dkmotorcycles.status": "Fuel %s%%  Health %s/%s",
+  "gui.dkmotorcycles.fuel_time": "About %s:%s of riding left",
+  "gui.dkmotorcycles.slot.engine": "Engine (copper, iron, diamond or netherite)",
+  "gui.dkmotorcycles.slot.fuel_tank": "Large Fuel Tank (triples fuel capacity)",
+  "gui.dkmotorcycles.slot.fuel": "Fuel: anything a furnace can burn",
+  "gui.dkmotorcycles.slot.saddlebag": "Saddlebag (+9 storage)",
+  "gui.dkmotorcycles.slot.trunk": "Trunk (+27 storage)",
+  "gui.dkmotorcycles.locked.saddlebag": "Install a saddlebag",
+  "gui.dkmotorcycles.locked.trunk": "Install a trunk",
+
+  "hud.dkmotorcycles.speed": "%s km/h",
+  "hud.dkmotorcycles.light_on": "Light",
+  "hud.dkmotorcycles.no_fuel": "Out of fuel",
+  "hud.dkmotorcycles.no_engine": "No engine installed",
+
+  "death.attack.dkmotorcycles.runOver": "%1$s was run over by a motorcycle",
+  "death.attack.dkmotorcycles.runOver.player": "%1$s was run over by %2$s",
+  "death.attack.dkmotorcycles.runOver.item": "%1$s was run over by %2$s"
+}

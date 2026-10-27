@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "C": "minecraft:copper_ingot",
+    "F": "minecraft:furnace",
+    "R": "minecraft:redstone"
+  },
+  "pattern": [
+    "CCC",
+    "CRC",
+    "CFC"
+  ],
+  "result": {
+    "id": "dkmotorcycles:copper_engine"
+  }
+}

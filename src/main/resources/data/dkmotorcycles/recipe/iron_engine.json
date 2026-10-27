@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "E": "dkmotorcycles:copper_engine",
+    "I": "minecraft:iron_ingot",
+    "R": "minecraft:redstone"
+  },
+  "pattern": [
+    "IRI",
+    "IEI",
+    "III"
+  ],
+  "result": {
+    "id": "dkmotorcycles:iron_engine"
+  }
+}
