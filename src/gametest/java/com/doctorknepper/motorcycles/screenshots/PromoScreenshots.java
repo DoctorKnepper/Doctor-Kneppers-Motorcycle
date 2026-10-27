@@ -47,6 +47,10 @@ public class PromoScreenshots implements FabricClientGameTest {
 		try (TestSingleplayerContext sp = ctx.worldBuilder().create()) {
 			settle(ctx, sp);
 			buildScene(ctx, sp);
+			if (Boolean.getBoolean("dk.headlightOnly")) {
+				tunnelHeadlight(ctx, sp);
+				return;
+			}
 
 			heroShots(ctx, sp);
 			engineLineup(ctx, sp);
@@ -396,7 +400,7 @@ public class PromoScreenshots implements FabricClientGameTest {
 		ctx.runOnClient(mc -> mc.options.fov().set(70));
 		mount(ctx, sp, 156.5, -90F, BLACK, fullKit("diamond"), false);
 		hud(ctx, false, CameraType.THIRD_PERSON_BACK);
-		ctx.waitTicks(40);
+		ctx.waitTicks(60);
 		settle(ctx, sp);
 		shot(ctx, "headlight_on");
 		s.runOnServer(server -> player(server).level().getEntities(ModEntities.MOTORCYCLE, e -> true).getFirst().toggleHeadlight());

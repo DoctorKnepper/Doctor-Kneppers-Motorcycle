@@ -112,6 +112,8 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 	// server-side state
 	private @Nullable Vec3 lastServerPos;
 	private @Nullable BlockPos lightPos;
+	private int lightPlacedTick;
+	private static final int LIGHT_REFRESH_TICKS = 40;
 
 	public MotorcycleEntity(final EntityType<? extends MotorcycleEntity> type, final Level level) {
 		super(type, level);
@@ -373,6 +375,17 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		}
 
 		if (Objects.equals(target, this.lightPos)) {
+			if (this.lightPos != null) {
+				if (!level.getBlockState(this.lightPos).is(Blocks.LIGHT)) {
+					// Put the light back if something removed it (a player, a piston, another mod...).
+					level.setBlock(this.lightPos, Blocks.LIGHT.defaultBlockState().setValue(LightBlock.LEVEL, 15), 3);
+				} else if (this.tickCount - this.lightPlacedTick == LIGHT_REFRESH_TICKS) {
+					// A light placed while the rider's chunks are still loading (login, teleport, respawn) never
+					// reaches the client. Clearing it for one tick makes the line above re-place it once the
+					// chunks have arrived, so a parked bike's headlight still lights the ground.
+					level.setBlock(this.lightPos, Blocks.AIR.defaultBlockState(), 3);
+				}
+			}
 			return;
 		}
 
@@ -380,6 +393,7 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		if (target != null) {
 			level.setBlock(target, Blocks.LIGHT.defaultBlockState().setValue(LightBlock.LEVEL, 15), 3);
 			this.lightPos = target;
+			this.lightPlacedTick = this.tickCount;
 		}
 	}
 

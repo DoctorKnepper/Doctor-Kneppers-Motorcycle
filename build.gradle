@@ -62,3 +62,10 @@ fabricApi {
 		eula = true
 	}
 }
+
+// ./gradlew runClientGameTest -PheadlightOnly  -> only stage the headlight tunnel scene
+tasks.matching { it.name == "runClientGameTest" }.configureEach {
+	if (project.hasProperty("headlightOnly")) {
+		jvmArgs "-Ddk.headlightOnly=true"
+	}
+}
