@@ -64,6 +64,8 @@ public class MotorcycleItem extends Item {
 			if (!bike.loadFromItem(stack)) {
 				bike.installStarterEngine();
 			}
+			// Whoever places the bike owns it, so handing someone the item hands them the bike.
+			bike.setOwner(player);
 			serverLevel.addFreshEntity(bike);
 			serverLevel.gameEvent(player, GameEvent.ENTITY_PLACE, location);
 			stack.consume(1, player);

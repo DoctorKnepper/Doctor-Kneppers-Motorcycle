@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "L": "minecraft:leather",
+    "M": "minecraft:minecart"
+  },
+  "pattern": [
+    " L ",
+    "IMI"
+  ],
+  "result": {
+    "id": "dkmotorcycles:sidecar"
+  }
+}

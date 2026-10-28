@@ -35,7 +35,7 @@ public class EngineSoundInstance extends AbstractTickableSoundInstance {
 		double dx = this.bike.getX() - this.bike.xo;
 		double dz = this.bike.getZ() - this.bike.zo;
 		float speed = (float) Math.sqrt(dx * dx + dz * dz);
-		float top = Math.max(0.3F, this.bike.getEngine().speed() * 2.2F);
+		float top = Math.max(0.2F, this.bike.getTopSpeed() * 2.2F);
 		float load = Mth.clamp(speed / top, 0.0F, 1.0F);
 		this.pitch = 0.45F + load * 0.75F;
 		this.volume = 0.35F + load * 0.35F;

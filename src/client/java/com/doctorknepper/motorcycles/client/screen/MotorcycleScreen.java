@@ -2,6 +2,7 @@ package com.doctorknepper.motorcycles.client.screen;
 
 import static com.doctorknepper.motorcycles.menu.MotorcycleMenu.GUI_HEIGHT;
 import static com.doctorknepper.motorcycles.menu.MotorcycleMenu.PLAYER_INV_Y;
+import static com.doctorknepper.motorcycles.menu.MotorcycleMenu.SIDECAR_ROW_Y;
 import static com.doctorknepper.motorcycles.menu.MotorcycleMenu.STORAGE_X;
 import static com.doctorknepper.motorcycles.menu.MotorcycleMenu.STORAGE_Y;
 import static com.doctorknepper.motorcycles.menu.MotorcycleMenu.UPGRADE_ROW_Y;
@@ -124,7 +125,7 @@ public class MotorcycleScreen extends AbstractContainerScreen<MotorcycleMenu> {
 			Component status = Component.translatable(
 				"gui.dkmotorcycles.status", fuelPercent, Math.round(bike.getHealth()), Math.round(bike.getMaxHealth())
 			);
-			graphics.text(this.font, status, this.imageWidth - 8 - this.font.width(status), this.inventoryLabelY, LABEL, false);
+			graphics.text(this.font, status, this.imageWidth - 8 - this.font.width(status), SIDECAR_ROW_Y + 4, LABEL, false);
 		}
 	}
 
@@ -135,6 +136,10 @@ public class MotorcycleScreen extends AbstractContainerScreen<MotorcycleMenu> {
 			int index = this.hoveredSlot.index;
 			if (index >= 0 && index < SLOT_HINTS.length) {
 				graphics.setTooltipForNextFrame(this.font, SLOT_HINTS[index], mouseX, mouseY);
+			} else if (index == MotorcycleEntity.SLOT_SIDECAR_LEFT || index == MotorcycleEntity.SLOT_SIDECAR_RIGHT) {
+				graphics.setTooltipForNextFrame(this.font, Component.translatable(
+					index == MotorcycleEntity.SLOT_SIDECAR_LEFT ? "gui.dkmotorcycles.slot.sidecar_left" : "gui.dkmotorcycles.slot.sidecar_right"
+				), mouseX, mouseY);
 			}
 		}
 

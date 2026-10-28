@@ -32,6 +32,12 @@ public class MotorcycleModel extends EntityModel<MotorcycleRenderState> {
 	private final ModelPart rearWheel;
 	private final ModelPart[] saddlebags;
 	private final ModelPart trunk;
+	private final ModelPart sidecarLeft;
+	private final ModelPart sidecarRight;
+	private final ModelPart sidecarLeftPaint;
+	private final ModelPart sidecarRightPaint;
+	private final ModelPart sidecarLeftWheel;
+	private final ModelPart sidecarRightWheel;
 
 	public MotorcycleModel(final ModelPart root, final Group group) {
 		super(root);
@@ -46,6 +52,12 @@ public class MotorcycleModel extends EntityModel<MotorcycleRenderState> {
 			this.frame.getChild("saddlebag_1"), this.frame.getChild("saddlebag_2"), this.frame.getChild("saddlebag_3")
 		};
 		this.trunk = this.frame.getChild("trunk");
+		this.sidecarLeft = this.frame.getChild("sidecar_left");
+		this.sidecarRight = this.frame.getChild("sidecar_right");
+		this.sidecarLeftPaint = this.paint.getChild("sidecar_left_paint");
+		this.sidecarRightPaint = this.paint.getChild("sidecar_right_paint");
+		this.sidecarLeftWheel = this.sidecarLeft.getChild("sidecar_left_wheel");
+		this.sidecarRightWheel = this.sidecarRight.getChild("sidecar_right_wheel");
 	}
 
 	@Override
@@ -62,5 +74,14 @@ public class MotorcycleModel extends EntityModel<MotorcycleRenderState> {
 			this.saddlebags[bag].visible = (state.upgrades & MotorcycleEntity.bagBit(bag)) != 0;
 		}
 		this.trunk.visible = (state.upgrades & MotorcycleEntity.UPGRADE_TRUNK) != 0;
+		boolean left = (state.upgrades & MotorcycleEntity.UPGRADE_SIDECAR_LEFT) != 0;
+		boolean right = (state.upgrades & MotorcycleEntity.UPGRADE_SIDECAR_RIGHT) != 0;
+		this.sidecarLeft.visible = left;
+		this.sidecarRight.visible = right;
+		this.sidecarLeftPaint.visible = left;
+		this.sidecarRightPaint.visible = right;
+		// The smaller sidecar wheel turns faster.
+		this.sidecarLeftWheel.xRot = state.wheelRotation * 1.25F;
+		this.sidecarRightWheel.xRot = state.wheelRotation * 1.25F;
 	}
 }

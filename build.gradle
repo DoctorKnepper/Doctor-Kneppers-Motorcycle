@@ -69,3 +69,10 @@ tasks.matching { it.name == "runClientGameTest" }.configureEach {
 		jvmArgs "-Ddk.headlightOnly=true"
 	}
 }
+
+// ./gradlew runClientGameTest -PbehaviorTests  -> play the mod and check the riding rules (fails on any broken rule)
+tasks.matching { it.name == "runClientGameTest" }.configureEach {
+	if (project.hasProperty("behaviorTests")) {
+		jvmArgs "-Ddk.behaviorTests=true"
+	}
+}

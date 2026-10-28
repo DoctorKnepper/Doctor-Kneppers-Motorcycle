@@ -26,6 +26,7 @@ public final class ModItems {
 	public static final Item FUEL_TANK = register("fuel_tank", Item::new, new Item.Properties().stacksTo(1));
 	public static final Item SADDLEBAG = register("saddlebag", Item::new, new Item.Properties().stacksTo(1));
 	public static final Item TRUNK = register("trunk", Item::new, new Item.Properties().stacksTo(1));
+	public static final Item SIDECAR = register("sidecar", Item::new, new Item.Properties().stacksTo(1));
 
 	private ModItems() {
 	}
@@ -45,6 +46,7 @@ public final class ModItems {
 			output.accept(FUEL_TANK);
 			output.accept(SADDLEBAG);
 			output.accept(TRUNK);
+			output.accept(SIDECAR);
 		});
 	}
 }

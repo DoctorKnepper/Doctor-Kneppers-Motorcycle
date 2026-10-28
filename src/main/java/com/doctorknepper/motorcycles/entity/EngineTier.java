@@ -1,26 +1,23 @@
 package com.doctorknepper.motorcycles.entity;
 
 /**
- * Engine tiers, from copper up to netherite.
- * {@code speed} is the ridden movement speed; roughly 43 blocks/second per 1.0.
+ * Engine tiers, from copper up to netherite. Top speeds live in the config
+ * ({@link com.doctorknepper.motorcycles.config.MotorcycleConfig}).
  */
 public enum EngineTier {
-	NONE(0.0F, 0x000000),
-	COPPER(0.30F, 0xE3874F),
-	IRON(0.42F, 0xE6E6E6),
-	DIAMOND(0.58F, 0x6FF0E2),
-	NETHERITE(0.80F, 0x5A5154);
+	NONE(0x000000),
+	COPPER(0xE3874F),
+	IRON(0xE6E6E6),
+	DIAMOND(0x6FF0E2),
+	NETHERITE(0x5A5154);
 
-	private final float speed;
+	/** Ridden movement speed of 1.0 moves the bike about this many blocks per second on flat ground. */
+	public static final double BLOCKS_PER_SECOND_PER_SPEED = 44.0;
+
 	private final int color;
 
-	EngineTier(final float speed, final int color) {
-		this.speed = speed;
+	EngineTier(final int color) {
 		this.color = color;
-	}
-
-	public float speed() {
-		return this.speed;
 	}
 
 	/** RGB tint applied to the engine block on the model. */

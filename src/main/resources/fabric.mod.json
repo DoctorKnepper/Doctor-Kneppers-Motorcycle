@@ -3,15 +3,15 @@
 	"id": "dkmotorcycles",
 	"version": "${version}",
 	"name": "Doctor Knepper's Motorcycles",
-	"description": "Ride an upgradeable, fuel-burning motorcycle: copper to netherite engines, saddlebags, a trunk, a second seat, paint and a headlight that lights the road.",
+	"description": "Ride an upgradeable, fuel-burning motorcycle: copper to netherite engines, saddlebags, a trunk, sidecars, paint, a horn and a headlight that lights the road.",
 	"authors": [
 		"DoctorKnepper"
 	],
 	"contact": {
-		"sources": "https://github.com/DoctorKnepper/doctor-kneppers-motorcyle",
-		"issues": "https://github.com/DoctorKnepper/doctor-kneppers-motorcyle/issues"
+		"sources": "https://github.com/DoctorKnepper/Doctor-Kneppers-Motorcycle",
+		"issues": "https://github.com/DoctorKnepper/Doctor-Kneppers-Motorcycle/issues"
 	},
-	"license": "MIT",
+	"license": "CC0-1.0",
 	"icon": "assets/dkmotorcycles/icon.png",
 	"environment": "*",
 	"entrypoints": {

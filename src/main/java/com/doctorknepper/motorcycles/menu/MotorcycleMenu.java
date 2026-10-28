@@ -6,6 +6,9 @@ import static com.doctorknepper.motorcycles.entity.MotorcycleEntity.INVENTORY_SI
 import static com.doctorknepper.motorcycles.entity.MotorcycleEntity.SLOT_ENGINE;
 import static com.doctorknepper.motorcycles.entity.MotorcycleEntity.SLOT_FIRST_BAG;
 import static com.doctorknepper.motorcycles.entity.MotorcycleEntity.SLOT_FUEL;
+import static com.doctorknepper.motorcycles.entity.MotorcycleEntity.SLOT_SIDECAR_LEFT;
+import static com.doctorknepper.motorcycles.entity.MotorcycleEntity.SLOT_SIDECAR_RIGHT;
+import static com.doctorknepper.motorcycles.entity.MotorcycleEntity.STORAGE_END;
 import static com.doctorknepper.motorcycles.entity.MotorcycleEntity.SLOT_TANK;
 import static com.doctorknepper.motorcycles.entity.MotorcycleEntity.SLOT_TRUNK;
 import static com.doctorknepper.motorcycles.entity.MotorcycleEntity.STORAGE_START;
@@ -36,10 +39,13 @@ public class MotorcycleMenu extends AbstractContainerMenu {
 	public static final int FIRST_BAG_X = 50;
 	public static final int TRUNK_X = 104;
 	public static final int FUEL_X = 152;
+	public static final int SIDECAR_ROW_Y = 40;
+	public static final int SIDECAR_LEFT_X = 8;
+	public static final int SIDECAR_RIGHT_X = 26;
 	public static final int STORAGE_X = 8;
-	public static final int STORAGE_Y = 42;
-	public static final int PLAYER_INV_Y = 162;
-	public static final int GUI_HEIGHT = 244;
+	public static final int STORAGE_Y = 62;
+	public static final int PLAYER_INV_Y = 182;
+	public static final int GUI_HEIGHT = 264;
 
 	private static final int PLAYER_START = INVENTORY_SIZE;
 	private static final int HOTBAR_START = PLAYER_START + 27;
@@ -111,6 +117,18 @@ public class MotorcycleMenu extends AbstractContainerMenu {
 			}
 		}
 
+		// Sidecars: can't be taken off with someone sitting in them
+		this.addSlot(new UpgradeSlot(
+			container, SLOT_SIDECAR_LEFT, SIDECAR_LEFT_X, SIDECAR_ROW_Y,
+			s -> s.is(ModItems.SIDECAR),
+			() -> bike == null || bike.isSeatFree(MotorcycleEntity.Seat.SIDECAR_LEFT)
+		));
+		this.addSlot(new UpgradeSlot(
+			container, SLOT_SIDECAR_RIGHT, SIDECAR_RIGHT_X, SIDECAR_ROW_Y,
+			s -> s.is(ModItems.SIDECAR),
+			() -> bike == null || bike.isSeatFree(MotorcycleEntity.Seat.SIDECAR_RIGHT)
+		));
+
 		this.addStandardInventorySlots(playerInventory, 8, PLAYER_INV_Y);
 	}
 
@@ -158,7 +176,7 @@ public class MotorcycleMenu extends AbstractContainerMenu {
 			}
 		} else {
 			boolean moved = false;
-			for (int target : new int[] {SLOT_ENGINE, SLOT_TANK, SLOT_FIRST_BAG, SLOT_FIRST_BAG + 1, SLOT_FIRST_BAG + 2, SLOT_TRUNK}) {
+			for (int target : new int[] {SLOT_ENGINE, SLOT_TANK, SLOT_FIRST_BAG, SLOT_FIRST_BAG + 1, SLOT_FIRST_BAG + 2, SLOT_TRUNK, SLOT_SIDECAR_LEFT, SLOT_SIDECAR_RIGHT}) {
 				Slot targetSlot = this.slots.get(target);
 				if (!targetSlot.hasItem() && targetSlot.mayPlace(stack) && this.moveItemStackTo(stack, target, target + 1, false)) {
 					moved = true;
@@ -169,7 +187,7 @@ public class MotorcycleMenu extends AbstractContainerMenu {
 				moved = this.moveItemStackTo(stack, SLOT_FUEL, SLOT_FUEL + 1, false);
 			}
 			if (!moved) {
-				moved = this.moveItemStackTo(stack, STORAGE_START, INVENTORY_SIZE, false);
+				moved = this.moveItemStackTo(stack, STORAGE_START, STORAGE_END, false);
 			}
 			if (!moved) {
 				moved = slotIndex < HOTBAR_START

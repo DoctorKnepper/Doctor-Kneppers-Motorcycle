@@ -1,11 +1,14 @@
 package com.doctorknepper.motorcycles.entity;
 
 import com.doctorknepper.motorcycles.DKMotorcycles;
+import com.doctorknepper.motorcycles.config.MotorcycleConfig;
 import com.doctorknepper.motorcycles.item.EngineItem;
 import com.doctorknepper.motorcycles.menu.MotorcycleMenu;
 import com.doctorknepper.motorcycles.registry.ModItems;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import net.fabricmc.fabric.api.menu.v1.ExtendedMenuProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -21,7 +24,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.ContainerHelper;
@@ -35,9 +38,18 @@ import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.HasCustomInventoryScreen;
 import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.entity.Leashable;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.animal.equine.AbstractHorse;
+import net.minecraft.world.entity.animal.golem.IronGolem;
+import net.minecraft.world.entity.animal.golem.SnowGolem;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.npc.villager.AbstractVillager;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -61,10 +73,11 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The motorcycle. Built on the same riding system horses use: the rider's client simulates
- * movement (smooth, auto step-up over full blocks), the server handles fuel, damage and lights.
+ * movement (smooth, auto step-up over full blocks, edge braking), the server handles fuel,
+ * damage, seats, ownership and lights.
  */
 public class MotorcycleEntity extends LivingEntity implements HasCustomInventoryScreen {
-	// ---- inventory layout ----
+	// ---- inventory layout (indices are saved to disk: only ever append) ----
 	public static final int SLOT_ENGINE = 0;
 	public static final int SLOT_TANK = 1;
 	public static final int SLOT_FUEL = 2;
@@ -75,23 +88,34 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 	public static final int BAG_SIZE = 9;
 	public static final int TRUNK_SIZE = 27;
 	public static final int TRUNK_STORAGE_START = STORAGE_START + BAG_COUNT * BAG_SIZE;
-	public static final int INVENTORY_SIZE = TRUNK_STORAGE_START + TRUNK_SIZE;
+	public static final int STORAGE_END = TRUNK_STORAGE_START + TRUNK_SIZE;
+	public static final int SLOT_SIDECAR_LEFT = STORAGE_END;
+	public static final int SLOT_SIDECAR_RIGHT = STORAGE_END + 1;
+	public static final int INVENTORY_SIZE = SLOT_SIDECAR_RIGHT + 1;
 
 	// ---- upgrade bits (synced so the client can render and size the GUI) ----
 	public static final int UPGRADE_TANK = 1;
 	public static final int UPGRADE_BAG_1 = 1 << 1;
 	public static final int UPGRADE_TRUNK = 1 << 4;
+	public static final int UPGRADE_SIDECAR_LEFT = 1 << 5;
+	public static final int UPGRADE_SIDECAR_RIGHT = 1 << 6;
 
 	// ---- tuning ----
 	public static final int BASE_FUEL_CAPACITY = 12_000;
 	public static final int LARGE_FUEL_CAPACITY = 36_000;
-	private static final float REVERSE_SPEED = 0.08F;
+	private static final float REVERSE_SPEED = 0.06F;
+	private static final float PADDLE_SPEED = 0.04F;
 	private static final float MAX_TURN_PER_TICK = 14.0F;
+	private static final float MIN_TURN_PER_TICK = 5.0F;
 	private static final float BOOST_MULTIPLIER = 1.15F;
 	private static final double RAM_MIN_SPEED = 0.3;
-	private static final float SEAT_HEIGHT = 0.92F;
+	private static final double FLOAT_DEPTH = 0.5;
 	private static final float WHEEL_RADIUS_BLOCKS = 5.0F / 16.0F;
+	private static final int LIGHT_REFRESH_TICKS = 40;
 	private static final String ITEM_DATA_KEY = "MotorcycleData";
+
+	/** Client-side: true while the rider holds the key that drives over edges (set by the client mod). */
+	public static BooleanSupplier edgeOverrideHeld = () -> false;
 
 	public static final ResourceKey<DamageType> RUN_OVER = ResourceKey.create(Registries.DAMAGE_TYPE, DKMotorcycles.id("run_over"));
 
@@ -101,6 +125,33 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 	private static final EntityDataAccessor<Integer> DATA_COLOR = SynchedEntityData.defineId(MotorcycleEntity.class, EntityDataSerializers.INT);
 	private static final EntityDataAccessor<Integer> DATA_BOOST = SynchedEntityData.defineId(MotorcycleEntity.class, EntityDataSerializers.INT);
 	private static final EntityDataAccessor<Boolean> DATA_HEADLIGHT = SynchedEntityData.defineId(MotorcycleEntity.class, EntityDataSerializers.BOOLEAN);
+	private static final EntityDataAccessor<Float> DATA_TOP_SPEED = SynchedEntityData.defineId(MotorcycleEntity.class, EntityDataSerializers.FLOAT);
+	private static final EntityDataAccessor<Integer> DATA_EDGE_DEPTH = SynchedEntityData.defineId(MotorcycleEntity.class, EntityDataSerializers.INT);
+
+	/** Who sits where, as entity ids (-1 = empty). Synced so every client places riders identically. */
+	public enum Seat {
+		DRIVER(0.0, 0.92, -0.1),
+		PILLION(0.0, 0.92, -0.62),
+		SIDECAR_LEFT(0.84, 0.66, -0.15),
+		SIDECAR_RIGHT(-0.84, 0.66, -0.15);
+
+		final double x;
+		final double y;
+		final double z;
+		EntityDataAccessor<Integer> data;
+
+		Seat(final double x, final double y, final double z) {
+			this.x = x;
+			this.y = y;
+			this.z = z;
+		}
+	}
+
+	static {
+		for (Seat seat : Seat.values()) {
+			seat.data = SynchedEntityData.defineId(MotorcycleEntity.class, EntityDataSerializers.INT);
+		}
+	}
 
 	private final MotorcycleContainer inventory = new MotorcycleContainer(this);
 
@@ -108,12 +159,17 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 	private float throttle;
 	private float wheelRotation;
 	private float wheelRotationO;
+	private int edgeWarningTicks;
 
 	// server-side state
 	private @Nullable Vec3 lastServerPos;
 	private @Nullable BlockPos lightPos;
 	private int lightPlacedTick;
-	private static final int LIGHT_REFRESH_TICKS = 40;
+	private double fuelDebt;
+	private int hornTicks;
+	private @Nullable UUID ownerId;
+	private String ownerName = "";
+	private boolean seatMobsInSidecarFirst;
 
 	public MotorcycleEntity(final EntityType<? extends MotorcycleEntity> type, final Level level) {
 		super(type, level);
@@ -138,6 +194,11 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		entityData.define(DATA_COLOR, DyeColor.RED.getId());
 		entityData.define(DATA_BOOST, 0);
 		entityData.define(DATA_HEADLIGHT, true);
+		entityData.define(DATA_TOP_SPEED, 0.0F);
+		entityData.define(DATA_EDGE_DEPTH, 3);
+		for (Seat seat : Seat.values()) {
+			entityData.define(seat.data, -1);
+		}
 	}
 
 	// =====================================================================
@@ -176,6 +237,10 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		return UPGRADE_BAG_1 << bag;
 	}
 
+	public int sidecarCount() {
+		return (this.hasUpgrade(UPGRADE_SIDECAR_LEFT) ? 1 : 0) + (this.hasUpgrade(UPGRADE_SIDECAR_RIGHT) ? 1 : 0);
+	}
+
 	public DyeColor getColor() {
 		return DyeColor.byId(this.entityData.get(DATA_COLOR));
 	}
@@ -197,17 +262,29 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		this.playSound(SoundEvents.LEVER_CLICK, 0.5F, this.isHeadlightOn() ? 1.2F : 0.9F);
 	}
 
-	public boolean canDrive() {
-		return this.getEngine() != EngineTier.NONE && this.getFuel() > 0;
+	/** Floating in water (not just splashing through a puddle): the engine floods. */
+	public boolean isAfloat() {
+		double depth = this.getFluidHeight(FluidTags.WATER);
+		return depth > FLOAT_DEPTH + 0.1 || depth > 0.15 && !this.onGround();
 	}
 
+	public boolean canDrive() {
+		return this.getEngine() != EngineTier.NONE && this.getFuel() > 0 && !this.isAfloat();
+	}
+
+	/** Ridden movement speed at full throttle (about 44 blocks/second per 1.0). */
 	public float getTopSpeed() {
-		float speed = this.getEngine().speed();
+		float speed = this.entityData.get(DATA_TOP_SPEED);
 		return this.getBoost() > 0 ? speed * BOOST_MULTIPLIER : speed;
 	}
 
 	public float getWheelRotation(final float partialTicks) {
 		return Mth.lerp(partialTicks, this.wheelRotationO, this.wheelRotation);
+	}
+
+	/** Client-side: the bike just braked at a drop. */
+	public boolean isEdgeWarning() {
+		return this.edgeWarningTicks > 0;
 	}
 
 	/** Re-derives synced state (engine tier, installed upgrades) from the inventory. Server only. */
@@ -232,8 +309,193 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		if (this.inventory.getItem(SLOT_TRUNK).is(ModItems.TRUNK)) {
 			upgrades |= UPGRADE_TRUNK;
 		}
+		if (this.inventory.getItem(SLOT_SIDECAR_LEFT).is(ModItems.SIDECAR)) {
+			upgrades |= UPGRADE_SIDECAR_LEFT;
+		}
+		if (this.inventory.getItem(SLOT_SIDECAR_RIGHT).is(ModItems.SIDECAR)) {
+			upgrades |= UPGRADE_SIDECAR_RIGHT;
+		}
 		this.entityData.set(DATA_UPGRADES, upgrades);
 		this.setFuel(this.getFuel());
+		this.syncConfig();
+
+		// A sidecar taken off (by a command, say) can't keep its passenger.
+		this.ejectFromMissingSidecar(Seat.SIDECAR_LEFT, UPGRADE_SIDECAR_LEFT);
+		this.ejectFromMissingSidecar(Seat.SIDECAR_RIGHT, UPGRADE_SIDECAR_RIGHT);
+	}
+
+	private void ejectFromMissingSidecar(final Seat seat, final int bit) {
+		Entity rider = this.getSeated(seat);
+		if (rider != null && !this.hasUpgrade(bit)) {
+			rider.stopRiding();
+		}
+	}
+
+	/** Pushes server settings the rider's client needs into synced data. */
+	private void syncConfig() {
+		MotorcycleConfig config = MotorcycleConfig.get();
+		float speed = (float) (config.blocksPerSecond(this.getEngine()) / EngineTier.BLOCKS_PER_SECOND_PER_SPEED);
+		if (this.entityData.get(DATA_TOP_SPEED) != speed) {
+			this.entityData.set(DATA_TOP_SPEED, speed);
+		}
+		int depth = Math.max(0, config.edgeBrakingDepth);
+		if (this.entityData.get(DATA_EDGE_DEPTH) != depth) {
+			this.entityData.set(DATA_EDGE_DEPTH, depth);
+		}
+	}
+
+	@Override
+	public void onSyncedDataUpdated(final EntityDataAccessor<?> key) {
+		super.onSyncedDataUpdated(key);
+		if (DATA_UPGRADES.equals(key)) {
+			this.refreshDimensions();
+		}
+	}
+
+	/** Sidecars make the bike wider, so it no longer squeezes through gaps it visibly can't fit. */
+	@Override
+	protected EntityDimensions getDefaultDimensions(final Pose pose) {
+		EntityDimensions base = super.getDefaultDimensions(pose);
+		int sidecars = this.sidecarCount();
+		if (sidecars == 0) {
+			return base;
+		}
+		float width = sidecars == 1 ? 2.0F : 2.75F;
+		return base.scale(width / base.width(), 1.0F);
+	}
+
+	// =====================================================================
+	// Ownership
+	// =====================================================================
+
+	public void setOwner(final Player player) {
+		this.ownerId = player.getUUID();
+		this.ownerName = player.getGameProfile().name();
+	}
+
+	/** Owners, creative-mode players, everyone on unowned bikes, or everyone when the lock is off. */
+	public boolean isAllowed(final Player player) {
+		return this.ownerId == null
+			|| !MotorcycleConfig.get().ownerLock
+			|| this.ownerId.equals(player.getUUID())
+			|| player.getAbilities().instabuild;
+	}
+
+	private void denyNotOwner(final Player player) {
+		player.sendOverlayMessage(Component.translatable("message.dkmotorcycles.not_yours", this.ownerName));
+	}
+
+	// =====================================================================
+	// Seats
+	// =====================================================================
+
+	public @Nullable Entity getSeated(final Seat seat) {
+		int id = this.entityData.get(seat.data);
+		if (id < 0) {
+			return null;
+		}
+		Entity entity = this.level().getEntity(id);
+		return entity != null && this.hasPassenger(entity) ? entity : null;
+	}
+
+	public @Nullable Seat seatOf(final Entity passenger) {
+		for (Seat seat : Seat.values()) {
+			if (this.entityData.get(seat.data) == passenger.getId()) {
+				return seat;
+			}
+		}
+		return null;
+	}
+
+	private boolean seatExists(final Seat seat) {
+		return switch (seat) {
+			case DRIVER, PILLION -> true;
+			case SIDECAR_LEFT -> this.hasUpgrade(UPGRADE_SIDECAR_LEFT);
+			case SIDECAR_RIGHT -> this.hasUpgrade(UPGRADE_SIDECAR_RIGHT);
+		};
+	}
+
+	public boolean isSeatFree(final Seat seat) {
+		return this.getSeated(seat) == null;
+	}
+
+	/** Which seat this entity would take. Players drive if allowed; mobs prefer the sidecars. */
+	private @Nullable Seat findSeat(final Entity entity) {
+		if (entity instanceof Player player) {
+			boolean mayDrive = this.level().isClientSide() || this.isAllowed(player);
+			if (mayDrive && this.isSeatFree(Seat.DRIVER)) {
+				return Seat.DRIVER;
+			}
+			for (Seat seat : new Seat[] {Seat.PILLION, Seat.SIDECAR_LEFT, Seat.SIDECAR_RIGHT}) {
+				if (this.seatExists(seat) && this.isSeatFree(seat)) {
+					return seat;
+				}
+			}
+			return null;
+		}
+		Seat[] order = this.seatMobsInSidecarFirst
+			? new Seat[] {Seat.SIDECAR_LEFT, Seat.SIDECAR_RIGHT, Seat.PILLION}
+			: new Seat[] {Seat.PILLION, Seat.SIDECAR_LEFT, Seat.SIDECAR_RIGHT};
+		for (Seat seat : order) {
+			if (this.seatExists(seat) && this.isSeatFree(seat)) {
+				return seat;
+			}
+		}
+		return null;
+	}
+
+	@Override
+	public @Nullable LivingEntity getControllingPassenger() {
+		return this.getSeated(Seat.DRIVER) instanceof Player player ? player : null;
+	}
+
+	@Override
+	protected boolean canAddPassenger(final Entity passenger) {
+		return this.getPassengers().size() < 4 && this.findSeat(passenger) != null;
+	}
+
+	@Override
+	protected void addPassenger(final Entity passenger) {
+		Seat seat = this.findSeat(passenger);
+		super.addPassenger(passenger);
+		if (!this.level().isClientSide() && seat != null) {
+			this.entityData.set(seat.data, passenger.getId());
+		}
+		if (seat == Seat.DRIVER) {
+			passenger.absSnapRotationTo(this.getYRot(), passenger.getXRot());
+		}
+	}
+
+	@Override
+	protected void removePassenger(final Entity passenger) {
+		super.removePassenger(passenger);
+		if (!this.level().isClientSide()) {
+			for (Seat seat : Seat.values()) {
+				if (this.entityData.get(seat.data) == passenger.getId()) {
+					this.entityData.set(seat.data, -1);
+				}
+			}
+		}
+		if (this.getControllingPassenger() == null) {
+			this.throttle = 0.0F;
+		}
+	}
+
+	@Override
+	protected Vec3 getPassengerAttachmentPoint(final Entity passenger, final EntityDimensions dimensions, final float scale) {
+		Seat seat = this.seatOf(passenger);
+		if (seat == null) {
+			seat = passenger == this.getFirstPassenger() ? Seat.DRIVER : Seat.PILLION;
+		}
+		return new Vec3(seat.x * scale, seat.y * scale, seat.z * scale).yRot(-this.getYRot() * Mth.DEG_TO_RAD);
+	}
+
+	@Override
+	protected void positionRider(final Entity passenger, final Entity.MoveFunction moveFunction) {
+		super.positionRider(passenger, moveFunction);
+		if (passenger instanceof LivingEntity living) {
+			living.yBodyRot = this.getYRot();
+		}
 	}
 
 	// =====================================================================
@@ -243,6 +505,11 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 	@Override
 	public void tick() {
 		super.tick();
+		if (this.getFluidHeight(FluidTags.WATER) > FLOAT_DEPTH) {
+			// The bike bobs up to the surface instead of sinking.
+			Vec3 motion = this.getDeltaMovement();
+			this.setDeltaMovement(motion.x, Math.min(Math.max(motion.y, -0.02) + 0.06, 0.12), motion.z);
+		}
 		if (this.level() instanceof ServerLevel serverLevel) {
 			this.serverTick(serverLevel);
 		} else {
@@ -252,6 +519,9 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 
 	private void clientTick() {
 		this.wheelRotationO = this.wheelRotation;
+		if (this.edgeWarningTicks > 0) {
+			this.edgeWarningTicks--;
+		}
 		double dx = this.getX() - this.xo;
 		double dz = this.getZ() - this.zo;
 		double distance = Math.sqrt(dx * dx + dz * dz);
@@ -272,15 +542,32 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 	}
 
 	private void serverTick(final ServerLevel level) {
+		if (this.tickCount % 20 == 0) {
+			this.syncConfig();
+		}
 		this.refuelFromSlot(level);
 
 		LivingEntity controller = this.getControllingPassenger();
 		boolean throttling = controller instanceof ServerPlayer player
 			&& (player.getLastClientInput().forward() || player.getLastClientInput().backward());
-		if (throttling && this.getEngine() != EngineTier.NONE && this.getFuel() > 0) {
-			this.setFuel(this.getFuel() - 1);
+		if (throttling && this.canDrive()) {
+			this.fuelDebt += Math.max(0.0, MotorcycleConfig.get().fuelUseMultiplier);
+			int burn = (int) this.fuelDebt;
+			if (burn > 0) {
+				this.fuelDebt -= burn;
+				this.setFuel(this.getFuel() - burn);
+			}
 			if (this.getBoost() > 0) {
 				this.entityData.set(DATA_BOOST, this.getBoost() - 1);
+			}
+		}
+
+		for (Entity passenger : this.getPassengers()) {
+			// Riders never build up fall distance: if the bike drops, the bike takes the hit.
+			passenger.resetFallDistance();
+			// Clipping a lead onto a sidecar passenger leads it out.
+			if (!(passenger instanceof Player) && passenger instanceof Leashable leashable && leashable.isLeashed()) {
+				passenger.stopRiding();
 			}
 		}
 
@@ -291,7 +578,23 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 			this.ramEntities(level, speed, controller);
 		}
 
+		if (this.hornTicks > 0) {
+			this.hornTicks--;
+			if (this.hornTicks == 5) {
+				this.playSound(SoundEvents.NOTE_BLOCK_BIT.value(), 2.0F, 0.75F);
+			}
+		}
+
 		this.updateHeadlight(level);
+	}
+
+	/** Beep-beep. Heard by everyone nearby; can't be spammed. */
+	public void honk() {
+		if (this.hornTicks > 0) {
+			return;
+		}
+		this.hornTicks = 9;
+		this.playSound(SoundEvents.NOTE_BLOCK_BIT.value(), 2.0F, 0.75F);
 	}
 
 	private void refuelFromSlot(final ServerLevel level) {
@@ -328,20 +631,44 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		}
 	}
 
+	/** Pets, villagers, golems, armor stands, named or leashed mobs, and (by default) players are never hurt. */
+	private static boolean canRam(final LivingEntity entity) {
+		if (entity instanceof Player) {
+			return MotorcycleConfig.get().rammingHurtsPlayers;
+		}
+		if (entity instanceof OwnableEntity ownable && ownable.getOwnerReference() != null) {
+			return false;
+		}
+		if (entity instanceof AbstractHorse horse && horse.isTamed()) {
+			return false;
+		}
+		if (entity instanceof AbstractVillager || entity instanceof IronGolem || entity instanceof SnowGolem || entity instanceof ArmorStand) {
+			return false;
+		}
+		if (entity.hasCustomName()) {
+			return false;
+		}
+		return !(entity instanceof Leashable leashable && leashable.isLeashed());
+	}
+
 	private void ramEntities(final ServerLevel level, final double speed, final LivingEntity controller) {
+		double multiplier = MotorcycleConfig.get().rammingDamageMultiplier;
+		if (multiplier <= 0.0) {
+			return;
+		}
 		Vec3 forward = Vec3.directionFromRotation(0.0F, this.getYRot());
 		AABB box = this.getBoundingBox().inflate(0.2, 0.0, 0.2).expandTowards(forward.scale(0.6));
 		List<LivingEntity> victims = level.getEntitiesOfClass(
 			LivingEntity.class,
 			box,
-			e -> e != this && e.isAlive() && !this.hasPassenger(e) && !(e instanceof MotorcycleEntity) && !e.isSpectator()
+			e -> e != this && e.isAlive() && !this.hasPassenger(e) && !(e instanceof MotorcycleEntity) && !e.isSpectator() && canRam(e)
 		);
 		if (victims.isEmpty()) {
 			return;
 		}
 
 		DamageSource source = new DamageSource(level.registryAccess().lookupOrThrow(Registries.DAMAGE_TYPE).getOrThrow(RUN_OVER), this, controller);
-		float damage = (float) (speed * 9.0);
+		float damage = (float) (speed * 9.0 * multiplier);
 		for (LivingEntity victim : victims) {
 			if (victim.getInvulnerableTime() > 0) {
 				continue;
@@ -424,54 +751,26 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 	// =====================================================================
 
 	@Override
-	public @Nullable LivingEntity getControllingPassenger() {
-		return this.getFirstPassenger() instanceof Player player ? player : null;
-	}
-
-	@Override
-	protected boolean canAddPassenger(final Entity passenger) {
-		return this.getPassengers().size() < 2;
-	}
-
-	@Override
-	protected Vec3 getPassengerAttachmentPoint(final Entity passenger, final EntityDimensions dimensions, final float scale) {
-		int index = this.getPassengers().indexOf(passenger);
-		double z = index <= 0 ? -0.1 : -0.62;
-		return new Vec3(0.0, SEAT_HEIGHT * scale, z * scale).yRot(-this.getYRot() * Mth.DEG_TO_RAD);
-	}
-
-	@Override
-	protected void positionRider(final Entity passenger, final Entity.MoveFunction moveFunction) {
-		super.positionRider(passenger, moveFunction);
-		if (passenger instanceof LivingEntity living) {
-			living.yBodyRot = this.getYRot();
-		}
-	}
-
-	@Override
-	protected void addPassenger(final Entity passenger) {
-		super.addPassenger(passenger);
-		if (this.getPassengers().size() == 1) {
-			passenger.absSnapRotationTo(this.getYRot(), passenger.getXRot());
-		}
-	}
-
-	@Override
 	protected void tickRidden(final Player controller, final Vec3 riddenInput) {
 		super.tickRidden(controller, riddenInput);
 
+		// Steering gets gentler as speed rises, so high speed feels stable rather than twitchy.
+		float speed = (float) this.getDeltaMovement().horizontalDistance();
+		float maxTurn = Mth.clamp(MAX_TURN_PER_TICK - (speed - 0.2F) * 13.0F, MIN_TURN_PER_TICK, MAX_TURN_PER_TICK);
 		float diff = Mth.wrapDegrees(controller.getYRot() - this.getYRot());
-		float yaw = this.getYRot() + Mth.clamp(diff, -MAX_TURN_PER_TICK, MAX_TURN_PER_TICK);
+		float yaw = this.getYRot() + Mth.clamp(diff, -maxTurn, maxTurn);
 		this.setRot(yaw, 0.0F);
 		this.yBodyRot = this.yHeadRot = yaw;
 
 		this.updateThrottle(controller.zza);
+		this.applyEdgeBraking();
 	}
 
-	/** Arcade throttle: ramps up while holding forward, brakes on back, coasts otherwise. */
+	/** Arcade throttle: ramps up while holding forward, brakes on back, coasts otherwise. Paddles slowly when afloat. */
 	private void updateThrottle(final float forwardInput) {
-		float max = this.canDrive() ? this.getTopSpeed() : 0.0F;
-		float reverseMax = this.canDrive() ? REVERSE_SPEED : 0.0F;
+		boolean afloat = this.isAfloat();
+		float max = afloat ? PADDLE_SPEED : this.canDrive() ? this.getTopSpeed() : 0.0F;
+		float reverseMax = afloat ? PADDLE_SPEED : this.canDrive() ? REVERSE_SPEED : 0.0F;
 		if (forwardInput > 0.0F) {
 			if (this.throttle < 0.0F) {
 				this.throttle = Math.min(0.0F, this.throttle + 0.04F);
@@ -495,6 +794,51 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		}
 	}
 
+	/** Brakes instead of rolling off a drop deeper than the configured depth, unless the rider holds Sprint. */
+	private void applyEdgeBraking() {
+		int depth = this.entityData.get(DATA_EDGE_DEPTH);
+		if (depth <= 0 || this.throttle <= 0.0F || !this.onGround() || this.isAfloat() || edgeOverrideHeld.getAsBoolean()) {
+			return;
+		}
+		Vec3 forward = Vec3.directionFromRotation(0.0F, this.getYRot());
+		double speed = this.getDeltaMovement().horizontalDistance();
+		double lookahead = 1.2 + speed * 3.0;
+		for (double distance = 0.9; distance <= lookahead; distance += 0.5) {
+			if (this.isDropAt(this.position().add(forward.scale(distance)), depth)) {
+				this.throttle = 0.0F;
+				Vec3 motion = this.getDeltaMovement();
+				this.setDeltaMovement(motion.x * 0.4, motion.y, motion.z * 0.4);
+				this.edgeWarningTicks = 30;
+				return;
+			}
+		}
+	}
+
+	private boolean isDropAt(final Vec3 point, final int depth) {
+		Level level = this.level();
+		int feetY = Mth.floor(this.getY() + 0.01);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(Mth.floor(point.x), feetY, Mth.floor(point.z));
+		// A step or wall ahead is not a drop (the bike climbs or stops on its own).
+		for (int dy = 1; dy >= 0; dy--) {
+			pos.setY(feetY + dy);
+			if (isSupport(level, pos)) {
+				return false;
+			}
+		}
+		for (int dy = 1; dy <= depth; dy++) {
+			pos.setY(feetY - dy);
+			if (!level.isLoaded(pos) || isSupport(level, pos)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static boolean isSupport(final Level level, final BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+		return !state.getCollisionShape(level, pos).isEmpty() || !state.getFluidState().isEmpty();
+	}
+
 	@Override
 	protected Vec3 getRiddenInput(final Player controller, final Vec3 selfInput) {
 		if (this.throttle == 0.0F) {
@@ -508,14 +852,6 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		return Math.abs(this.throttle);
 	}
 
-	@Override
-	protected void removePassenger(final Entity passenger) {
-		super.removePassenger(passenger);
-		if (this.getControllingPassenger() == null) {
-			this.throttle = 0.0F;
-		}
-	}
-
 	// =====================================================================
 	// Interaction
 	// =====================================================================
@@ -525,7 +861,17 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		ItemStack stack = player.getItemInHand(hand);
 
 		if (player.isSecondaryUseActive()) {
-			this.openCustomInventoryScreen(player);
+			if (!this.level().isClientSide()) {
+				if (this.isAllowed(player)) {
+					this.openCustomInventoryScreen(player);
+				} else {
+					this.denyNotOwner(player);
+				}
+			}
+			return InteractionResult.SUCCESS;
+		}
+
+		if (this.loadLeashedMobs(player)) {
 			return InteractionResult.SUCCESS;
 		}
 
@@ -533,6 +879,10 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 			DyeColor dye = stack.get(DataComponents.DYE);
 			if (dye != null && dye != this.getColor()) {
 				if (!this.level().isClientSide()) {
+					if (!this.isAllowed(player)) {
+						this.denyNotOwner(player);
+						return InteractionResult.SUCCESS;
+					}
 					this.setColor(dye);
 					stack.consume(1, player);
 					this.playSound(SoundEvents.DYE_USE, 1.0F, 1.0F);
@@ -550,9 +900,13 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 			return InteractionResult.SUCCESS;
 		}
 
-		if (!player.isPassenger() && this.canAddPassenger(player)) {
+		if (!player.isPassenger()) {
 			if (!this.level().isClientSide()) {
-				player.startRiding(this);
+				if (this.canAddPassenger(player)) {
+					player.startRiding(this);
+				} else if (!this.isAllowed(player)) {
+					this.denyNotOwner(player);
+				}
 			}
 			return InteractionResult.SUCCESS;
 		}
@@ -560,9 +914,39 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		return InteractionResult.PASS;
 	}
 
+	/** Right-click while leading friendly mobs: they climb into free sidecar (then pillion) seats. */
+	private boolean loadLeashedMobs(final Player player) {
+		List<Leashable> leashed = Leashable.leashableInArea(this, l -> l.getLeashHolder() == player);
+		boolean any = false;
+		for (Leashable leashable : leashed) {
+			if (!(leashable instanceof LivingEntity mob) || mob instanceof Enemy || mob.isPassenger()) {
+				continue;
+			}
+			this.seatMobsInSidecarFirst = true;
+			boolean fits = this.canAddPassenger(mob);
+			if (fits && !this.level().isClientSide()) {
+				leashable.removeLeash();
+				if (!player.getAbilities().instabuild) {
+					ItemStack lead = new ItemStack(Items.LEAD);
+					if (!player.getInventory().add(lead)) {
+						player.spawnAtLocation((ServerLevel) this.level(), lead);
+					}
+				}
+				mob.startRiding(this, true, true);
+			}
+			this.seatMobsInSidecarFirst = false;
+			any |= fits;
+		}
+		return any;
+	}
+
 	@Override
 	public void openCustomInventoryScreen(final Player player) {
 		if (this.level().isClientSide() || !(player instanceof ServerPlayer serverPlayer)) {
+			return;
+		}
+		if (!this.isAllowed(player)) {
+			this.denyNotOwner(player);
 			return;
 		}
 
@@ -599,17 +983,28 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 			if (!player.getAbilities().mayBuild) {
 				return false;
 			}
-			if (player.isSecondaryUseActive() && !this.isVehicle()) {
-				this.pickUp(level, player);
-				return true;
+			if (!this.isAllowed(player)) {
+				this.denyNotOwner(player);
+				return false;
 			}
-			if (player.getAbilities().instabuild) {
-				this.breakApart(level, false);
+			boolean creative = player.getAbilities().instabuild;
+			if (player.isSecondaryUseActive() || creative) {
+				if (this.isVehicle() && !creative) {
+					player.sendOverlayMessage(Component.translatable("message.dkmotorcycles.riders_aboard"));
+					return false;
+				}
+				this.ejectPassengers();
+				this.pickUp(level, player);
 				return true;
 			}
 		}
 
 		return super.hurtServer(level, source, damage);
+	}
+
+	/** Vanilla hands a vehicle's fall damage on to its riders. The bike takes the hit for them instead. */
+	@Override
+	protected void propagateFallToPassengers(final double fallDistance, final float damageModifier, final DamageSource damageSource) {
 	}
 
 	@Override
@@ -639,7 +1034,7 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		this.discard();
 	}
 
-	/** Sneak + punch: packs the whole bike (gear, fuel, paint) into one item. */
+	/** Sneak + punch (or any punch in creative): packs the whole bike (gear, fuel, paint) into one item. */
 	private void pickUp(final ServerLevel level, final Player player) {
 		ItemStack stack = new ItemStack(ModItems.MOTORCYCLE);
 		this.saveToItem(stack);
@@ -714,6 +1109,10 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		if (this.lightPos != null) {
 			output.putLong("LightPos", this.lightPos.asLong());
 		}
+		if (this.ownerId != null) {
+			output.putString("Owner", this.ownerId.toString());
+			output.putString("OwnerName", this.ownerName);
+		}
 	}
 
 	@Override
@@ -722,6 +1121,13 @@ public class MotorcycleEntity extends LivingEntity implements HasCustomInventory
 		this.readBikeData(input);
 		long light = input.getLongOr("LightPos", Long.MIN_VALUE);
 		this.lightPos = light == Long.MIN_VALUE ? null : BlockPos.of(light);
+		String owner = input.getStringOr("Owner", "");
+		try {
+			this.ownerId = owner.isEmpty() ? null : UUID.fromString(owner);
+		} catch (IllegalArgumentException e) {
+			this.ownerId = null;
+		}
+		this.ownerName = input.getStringOr("OwnerName", "");
 	}
 
 	// =====================================================================

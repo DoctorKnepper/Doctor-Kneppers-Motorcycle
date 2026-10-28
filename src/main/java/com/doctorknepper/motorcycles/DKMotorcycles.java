@@ -1,6 +1,8 @@
 package com.doctorknepper.motorcycles;
 
+import com.doctorknepper.motorcycles.config.MotorcycleConfig;
 import com.doctorknepper.motorcycles.entity.MotorcycleEntity;
+import com.doctorknepper.motorcycles.network.HornPayload;
 import com.doctorknepper.motorcycles.network.ToggleHeadlightPayload;
 import com.doctorknepper.motorcycles.registry.ModEntities;
 import com.doctorknepper.motorcycles.registry.ModItems;
@@ -22,6 +24,7 @@ public class DKMotorcycles implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+		MotorcycleConfig.load();
 		ModEntities.init();
 		ModItems.init();
 		ModMenus.init();
@@ -30,6 +33,13 @@ public class DKMotorcycles implements ModInitializer {
 		ServerPlayNetworking.registerGlobalReceiver(ToggleHeadlightPayload.TYPE, (payload, context) -> {
 			if (context.player().getVehicle() instanceof MotorcycleEntity bike && bike.getControllingPassenger() == context.player()) {
 				bike.toggleHeadlight();
+			}
+		});
+
+		PayloadTypeRegistry.serverboundPlay().register(HornPayload.TYPE, HornPayload.CODEC);
+		ServerPlayNetworking.registerGlobalReceiver(HornPayload.TYPE, (payload, context) -> {
+			if (context.player().getVehicle() instanceof MotorcycleEntity bike && bike.getControllingPassenger() == context.player()) {
+				bike.honk();
 			}
 		});
 

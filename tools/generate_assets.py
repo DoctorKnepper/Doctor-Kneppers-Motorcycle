@@ -64,18 +64,31 @@ PARTS = [
 ]
 
 WHEELS = [
-    # name,          centre z
-    ("front_wheel", 11),
-    ("rear_wheel", -11),
+    # name,          parent,  centre x, centre y, centre z, radius, width
+    ("front_wheel", "frame", 0, 5, 11, 5, 3),
+    ("rear_wheel", "frame", 0, 5, -11, 5, 3),
 ]
-WHEEL_RADIUS = 5
-WHEEL_CENTRE_Y = 5
-WHEEL_WIDTH = 3
+
+# Sidecars, described for the LEFT side (x+); the right one is mirrored automatically.
+# Each side gets its own parent parts ("sidecar_left" in frame, "sidecar_left_paint" in paint)
+# so the model can show or hide a whole sidecar at once.
+SIDECAR_PARTS = [
+    # group,  name,       x0, x1, y0, y1, z0, z1,  style
+    ("paint", "tub",       8, 19, 3, 10, -10, 9, "paint"),
+    ("paint", "nose",      9, 18, 4, 9, 9, 12, "paint"),
+    ("paint", "cowl",      8, 19, 10, 13, 3, 9, "paint"),
+    ("frame", "cushion",   9, 18, 10, 11, -7, 3, "seat"),
+    ("frame", "backrest",  8, 19, 10, 16, -10, -7, "seat"),
+    ("frame", "strut_front", 2.5, 8, 5, 6, 5, 6, "metal"),
+    ("frame", "strut_rear",  2.5, 8, 5, 6, -8, -7, "metal"),
+    ("frame", "axle",      19, 20, 3.5, 4.5, -2.5, -1.5, "metal"),
+]
+SIDECAR_WHEEL = (20.5, 4, -2, 4, 2)  # centre x, centre y, centre z, radius, width
 
 # ---------------------------------------------------------------------------
 # Texture packing
 # ---------------------------------------------------------------------------
-TEX_W, TEX_H = 128, 128
+TEX_W, TEX_H = 128, 256
 
 
 def footprint(w, h, d):
@@ -251,32 +264,56 @@ def generate():
     packer = Packer(TEX_W)
     groups = {"frame": [], "paint": [], "engine": [], "light": []}
 
-    for group, name, x0, x1, y0, y1, z0, z1, style in PARTS:
+    def add_part(parent, group, name, x0, x1, y0, y1, z0, z1, style):
         mx, my, mz, w, h, d = to_model_box(x0, x1, y0, y1, z0, z1)
         uw, uh, ud = uv_size(w), uv_size(h), uv_size(d)
         u, v = packer.place(*footprint(uw, uh, ud))
         paint_box(img, u, v, uw, uh, ud, style)
         groups[group].append(
-            f'\t\t{group}.addOrReplaceChild("{name}", CubeListBuilder.create().texOffs({u}, {v})'
+            f'\t\t{parent}.addOrReplaceChild("{name}", CubeListBuilder.create().texOffs({u}, {v})'
             f".addBox({fmt(mx)}, {fmt(my)}, {fmt(mz)}, {fmt(w)}, {fmt(h)}, {fmt(d)}), PartPose.ZERO);"
         )
 
+    for group, name, x0, x1, y0, y1, z0, z1, style in PARTS:
+        add_part(group, group, name, x0, x1, y0, y1, z0, z1, style)
+
     wheel_lines = []
-    r = WHEEL_RADIUS
-    for name, cz in WHEELS:
-        u1, v1 = packer.place(*footprint(WHEEL_WIDTH, 2 * r, 2 * r))
-        paint_wheel(img, u1, v1, WHEEL_WIDTH, 2 * r, 2 * r)
-        u2, v2 = packer.place(*footprint(WHEEL_WIDTH, 2 * r, 2 * r))
-        paint_wheel(img, u2, v2, WHEEL_WIDTH, 2 * r, 2 * r)
-        box = f"{fmt(-WHEEL_WIDTH / 2)}, {fmt(-r)}, {fmt(-r)}, {fmt(WHEEL_WIDTH)}, {fmt(2 * r)}, {fmt(2 * r)}"
+
+    def add_wheel(parent, name, cx, cy, cz, r, width):
+        u1, v1 = packer.place(*footprint(width, 2 * r, 2 * r))
+        paint_wheel(img, u1, v1, width, 2 * r, 2 * r)
+        u2, v2 = packer.place(*footprint(width, 2 * r, 2 * r))
+        paint_wheel(img, u2, v2, width, 2 * r, 2 * r)
+        box = f"{fmt(-width / 2)}, {fmt(-r)}, {fmt(-r)}, {fmt(width)}, {fmt(2 * r)}, {fmt(2 * r)}"
         wheel_lines.append(
-            f'\t\tPartDefinition {name} = frame.addOrReplaceChild("{name}", CubeListBuilder.create().texOffs({u1}, {v1})'
-            f".addBox({box}), PartPose.offset(0.0F, {fmt(-WHEEL_CENTRE_Y)}, {fmt(-cz)}));"
+            f'\t\tPartDefinition {name} = {parent}.addOrReplaceChild("{name}", CubeListBuilder.create().texOffs({u1}, {v1})'
+            f".addBox({box}), PartPose.offset({fmt(cx)}, {fmt(-cy)}, {fmt(-cz)}));"
         )
         wheel_lines.append(
             f'\t\t{name}.addOrReplaceChild("{name}_diagonal", CubeListBuilder.create().texOffs({u2}, {v2})'
             f".addBox({box}, new CubeDeformation(-0.12F)), PartPose.rotation((float) (Math.PI / 4), 0.0F, 0.0F));"
         )
+
+    for name, parent, cx, cy, cz, r, width in WHEELS:
+        add_wheel(parent, name, cx, cy, cz, r, width)
+
+    sidecar_parents = []
+    for side, sign in (("left", 1), ("right", -1)):
+        frame_parent = f"sidecar_{side}"
+        paint_parent = f"sidecar_{side}_paint"
+        sidecar_parents.append(
+            f'\t\tPartDefinition {frame_parent} = frame.addOrReplaceChild("{frame_parent}", CubeListBuilder.create(), PartPose.ZERO);'
+        )
+        sidecar_parents.append(
+            f'\t\tPartDefinition {paint_parent} = paint.addOrReplaceChild("{paint_parent}", CubeListBuilder.create(), PartPose.ZERO);'
+        )
+        for group, name, x0, x1, y0, y1, z0, z1, style in SIDECAR_PARTS:
+            if sign < 0:
+                x0, x1 = -x1, -x0
+            parent = frame_parent if group == "frame" else paint_parent
+            add_part(parent, group, f"sidecar_{side}_{name}", x0, x1, y0, y1, z0, z1, style)
+        cx, cy, cz, r, width = SIDECAR_WHEEL
+        add_wheel(frame_parent, f"sidecar_{side}_wheel", cx * sign, cy, cz, r, width)
 
     used_h = packer.y + packer.row_h
     assert used_h <= TEX_H, f"texture overflow: {used_h} > {TEX_H}"
@@ -308,6 +345,7 @@ public final class MotorcycleModelLayer {{
 \t\tPartDefinition paint = root.addOrReplaceChild("paint", CubeListBuilder.create(), PartPose.ZERO);
 \t\tPartDefinition engine = root.addOrReplaceChild("engine", CubeListBuilder.create(), PartPose.ZERO);
 \t\tPartDefinition light = root.addOrReplaceChild("light", CubeListBuilder.create(), PartPose.ZERO);
+{chr(10).join(sidecar_parents)}
 {chr(10).join(groups["frame"])}
 {chr(10).join(wheel_lines)}
 {chr(10).join(groups["paint"])}
@@ -338,24 +376,24 @@ def icon_from_map(rows, palette):
 
 MOTORCYCLE_ICON = [
     "................",
-    "............HH..",
-    "...........HH...",
+    "................",
+    "..........KK....",
     "...........F....",
-    "...SSSS...FL....",
-    "..SSSSSTTTF.....",
-    "..PPPPTTTTFP....",
-    ".PPP.MEEEMFPP...",
-    ".PP..EEEEE.F....",
-    "TTTT.EEEEETTTT..",
-    "TRRT.XXX..TRRT..",
-    "TRHRT....TRHRT..",
-    "TRRT......TRRT..",
+    "....SSS....F....",
+    "...SSSSPPPPFL...",
+    "..PPPPPPPPPFL...",
+    "..MM.EEEEM..F...",
+    "..M..EEEE...F...",
+    ".TTT.XXXXX.TTT..",
+    "TRRRT.....TRRRT.",
+    "TRHRT.....TRHRT.",
+    "TRRRT.....TRRRT.",
     ".TTT.......TTT..",
     "................",
     "................",
 ]
 MOTORCYCLE_PAL = {
-    "H": "#2a2a2e", "F": "#b8bcc6", "L": "#fff2a0", "S": "#2e2622",
+    "K": "#26262a", "H": "#d8d8dc", "F": "#b8bcc6", "L": "#fff2a0", "S": "#2e2622",
     "T": "#1c1c1e", "P": "#c8302a", "M": "#4a4c53", "E": "#d08a5a",
     "R": "#8f939b", "X": "#c4c8cf",
 }
@@ -447,6 +485,27 @@ TRUNK_ICON = [
 TRUNK_PAL = {"A": "#3a2510", "B": "#a8742f", "C": "#8a5c22", "D": "#cfcfd4", "E": "#2a2a2e"}
 
 
+SIDECAR_ICON = [
+    "................",
+    "................",
+    "................",
+    "...SSSS.........",
+    "...SSSSAAAA.....",
+    "..APPPPPPPPPA...",
+    ".APPPPPPPPPPPA..",
+    ".APPPPPPPPPPPPA.",
+    ".APPPPPPPPPPPA..",
+    "..AAAAAAAAAAA...",
+    ".....MMMMM......",
+    "....TTT.........",
+    "...TRHRT........",
+    "....TTT.........",
+    "................",
+    "................",
+]
+SIDECAR_PAL = {"S": "#2e2622", "A": "#7a1c18", "P": "#c8302a", "M": "#4a4c53", "T": "#1c1c1e", "R": "#8f939b", "H": "#d8d8dc"}
+
+
 def generate_items():
     out = os.path.join(ASSETS, "textures/item")
     os.makedirs(out, exist_ok=True)
@@ -457,6 +516,7 @@ def generate_items():
     icon_from_map(FUEL_TANK_ICON, FUEL_TANK_PAL).save(os.path.join(out, "fuel_tank.png"))
     icon_from_map(SADDLEBAG_ICON, SADDLEBAG_PAL).save(os.path.join(out, "saddlebag.png"))
     icon_from_map(TRUNK_ICON, TRUNK_PAL).save(os.path.join(out, "trunk.png"))
+    icon_from_map(SIDECAR_ICON, SIDECAR_PAL).save(os.path.join(out, "sidecar.png"))
 
 
 def generate_mod_icon():

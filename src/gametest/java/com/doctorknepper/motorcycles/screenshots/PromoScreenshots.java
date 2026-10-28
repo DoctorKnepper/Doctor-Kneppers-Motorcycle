@@ -37,6 +37,9 @@ public class PromoScreenshots implements FabricClientGameTest {
 
 	@Override
 	public void runTest(final ClientGameTestContext ctx) {
+		if (Boolean.getBoolean("dk.behaviorTests")) {
+			return;
+		}
 		ctx.getInput().resizeWindow(1920, 1080);
 		ctx.runOnClient(mc -> {
 			mc.options.renderDistance().set(6);
