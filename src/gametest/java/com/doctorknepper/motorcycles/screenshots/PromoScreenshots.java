@@ -60,6 +60,7 @@ public class PromoScreenshots implements FabricClientGameTest {
 			paintLineup(ctx, sp);
 			storageStages(ctx, sp);
 			ridingShots(ctx, sp);
+			sidecarShots(ctx, sp);
 			bikeInventory(ctx, sp);
 			recipes(ctx, sp);
 			tunnelHeadlight(ctx, sp);
@@ -138,6 +139,12 @@ public class PromoScreenshots implements FabricClientGameTest {
 			sb.append("{Slot:").append(entries[i]).append("b,id:\"").append(entries[i + 1]).append("\",count:1}");
 		}
 		return sb.append(']').toString();
+	}
+
+	private static String sidecarKit(final String engine) {
+		String kit = fullKit(engine);
+		return kit.substring(0, kit.length() - 1)
+			+ ",{Slot:61b,id:\"dkmotorcycles:sidecar\",count:1},{Slot:62b,id:\"dkmotorcycles:sidecar\",count:1}]";
 	}
 
 	private static String fullKit(final String engine) {
@@ -281,9 +288,43 @@ public class PromoScreenshots implements FabricClientGameTest {
 		ctx.runOnClient(mc -> mc.options.fov().set(50));
 	}
 
+	private static void sidecarShots(final ClientGameTestContext ctx, final TestSingleplayerContext sp) {
+		TestServerContext s = sp.getServer();
+		s.runCommand("gamemode spectator @p");
+		summon(s, 10.5, 1.5, -60F, 9, sidecarKit("netherite"), null);
+		camera(ctx, sp, 13.9, -58.7, 5.9, 10.5, -59.6, 1.5);
+		shot(ctx, "sidecars_parked");
+		clearBikes(ctx, s);
+
+		ctx.runOnClient(mc -> mc.options.fov().set(70));
+		mount(ctx, sp, 0.5, -90F, 9, sidecarKit("netherite"), false);
+		s.runOnServer(server -> {
+			ServerPlayer player = player(server);
+			var level = player.level();
+			MotorcycleEntity bike = level.getEntities(ModEntities.MOTORCYCLE, e -> true).getFirst();
+			var wolf = new net.minecraft.world.entity.animal.wolf.Wolf(net.minecraft.world.entity.EntityTypes.WOLF, level);
+			wolf.snapTo(2.5, Y, 3.5, 0.0F, 0.0F);
+			wolf.tame(player);
+			level.addFreshEntity(wolf);
+			wolf.setLeashedTo(player, true);
+			var sheep = new net.minecraft.world.entity.animal.sheep.Sheep(net.minecraft.world.entity.EntityTypes.SHEEP, level);
+			sheep.snapTo(2.5, Y, -1.5, 0.0F, 0.0F);
+			level.addFreshEntity(sheep);
+			sheep.setLeashedTo(player, true);
+			bike.interact(player, net.minecraft.world.InteractionHand.MAIN_HAND, bike.position());
+		});
+		ctx.waitTicks(20);
+		hud(ctx, false, CameraType.THIRD_PERSON_FRONT);
+		ctx.waitTicks(20);
+		shot(ctx, "sidecars_riding");
+		hud(ctx, false, CameraType.FIRST_PERSON);
+		clearBikes(ctx, s);
+		ctx.runOnClient(mc -> mc.options.fov().set(50));
+	}
+
 	private static void bikeInventory(final ClientGameTestContext ctx, final TestSingleplayerContext sp) {
 		TestServerContext s = sp.getServer();
-		mount(ctx, sp, 10.5, -90F, RED, fullKit("netherite"), false);
+		mount(ctx, sp, 10.5, -90F, RED, sidecarKit("netherite"), false);
 		s.runOnServer(server -> {
 			ServerPlayer player = player(server);
 			List<? extends MotorcycleEntity> bikes = player.level().getEntities(ModEntities.MOTORCYCLE, e -> true);
@@ -332,6 +373,8 @@ public class PromoScreenshots implements FabricClientGameTest {
 		craft(ctx, s, "recipe_saddlebag", "SGS", "L L", "LLL",
 			"S", "minecraft:string", "G", "minecraft:gold_nugget", "L", "minecraft:leather");
 		craft(ctx, s, "recipe_trunk", "III", "ICI", "III", "I", "minecraft:iron_ingot", "C", "minecraft:chest");
+		craft(ctx, s, "recipe_sidecar", " L ", "IMI", "   ",
+			"L", "minecraft:leather", "I", "minecraft:iron_ingot", "M", "minecraft:minecart");
 
 		s.runOnServer(server -> {
 			ServerPlayer player = player(server);
